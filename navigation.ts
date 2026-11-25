@@ -1,0 +1,51 @@
+interface RouterHistoryState {
+  usr: unknown;
+  key: string;
+  idx: number;
+}
+
+function isRouterHistoryState(value: unknown): value is RouterHistoryState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { idx?: unknown }).idx === "number"
+  );
+}
+
+/** The app path of a thread that is not in the sidebar's live list. */
+export function threadPath(
+  threadId: string,
+  projectId: string,
+  isPersonalProject: boolean,
+): string {
+  const thread = encodeURIComponent(threadId);
+  return isPersonalProject
+    ? `/threads/${thread}`
+    : `/projects/${encodeURIComponent(projectId)}/threads/${thread}`;
+}
+
+/**
+ * Open `href` scrolled to the message at `seq`. BB's own thread search opens a
+ * hit by navigating with `searchMessageSeq` in the router state, but
+ * `useBbNavigate().toThread` cannot carry state, so this pushes the history
+ * entry the router would push and replays it with a popstate event. Returns
+ * false when the history is not the router's; the caller then falls back to
+ * `toThread`. (The mechanism comes from the Bookmarks plugin by rebryk.)
+ */
+export function openMessage(href: string, threadId: string, seq: number): boolean {
+  const current: unknown = window.history.state;
+  if (!isRouterHistoryState(current)) return false;
+  window.history.pushState(
+    {
+      usr: { searchMessageSeq: seq, searchThreadId: threadId },
+      key: Math.random().toString(36).slice(2, 10),
+      idx: current.idx + 1,
+    },
+    "",
+    href,
+  );
+  window.dispatchEvent(
+    new PopStateEvent("popstate", { state: window.history.state }),
+  );
+  return true;
+}

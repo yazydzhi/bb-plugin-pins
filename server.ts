@@ -1,225 +1,234 @@
-// bb-plugin-pins — a BB plugin backend entry.
-//
-// The default export is a factory that receives the plugin API. BB supplies
-// the tiny defineRpcContract runtime helper; the API type remains type-only.
-//
-// The example is a todo list. One store in bb.storage.kv serves three
-// surfaces: the Example todos page (app.tsx, over RPC), the `bb pins` CLI
-// command (below), and the skill in skills/example-todos/SKILL.md that tells
-// agents how to use that command. A write from any surface publishes a realtime signal so
-// every open page refetches.
 import { randomUUID } from "node:crypto";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { CHANGED_CHANNEL, MAX_TEXT_LENGTH, truncate } from "./shared";
 
-const todoSchema = z.object({
+const EXCERPT_LENGTH = 600;
+
+const roleSchema = z.enum(["user", "assistant"]);
+
+const messageSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    /** The message's `sourceSeqEnd`: unique per thread and stable. */
+    seq: z.number().int().nonnegative(),
+    /** Timeline row id; only used to mark pinned messages in the timeline. */
+    rowId: z.string().min(1).max(2_000),
+    role: roleSchema,
+    text: z.string().max(MAX_TEXT_LENGTH),
+  })
+  .strict();
+
+const pinSchema = z.object({
   id: z.string(),
-  title: z.string(),
-  done: z.boolean(),
-  createdAt: z.string(),
+  threadId: z.string(),
+  seq: z.number().int(),
+  rowId: z.string(),
+  role: roleSchema,
+  /** The pinned selection when there is one, else the message text; cut short. */
+  excerpt: z.string(),
+  quoted: z.boolean(),
+  threadTitle: z.string().nullable(),
+  projectId: z.string().nullable(),
+  threadDeleted: z.boolean(),
+  createdAt: z.number().int(),
 });
-export type Todo = z.infer<typeof todoSchema>;
 
-// Both schemas run at the wire boundary. Handler input/output are inferred
-// from the shared contract; app.tsx imports only its type.
+export type Pin = z.infer<typeof pinSchema>;
+
 export const rpcContract = defineRpcContract({
-  todos_list: {
-    input: z.null(),
-    output: z.object({ todos: z.array(todoSchema) }),
+  list: {
+    input: z.object({ threadId: z.string().min(1).max(200).optional() }).strict().nullable(),
+    output: z.object({ pins: z.array(pinSchema) }),
   },
-  todos_add: {
-    input: z.object({ title: z.string().trim().min(1).max(200) }),
-    output: todoSchema,
+  toggle: {
+    input: messageSchema,
+    output: z.object({ pin: pinSchema.nullable() }),
   },
-  todos_set_done: {
-    input: z.object({ id: z.string(), done: z.boolean() }),
-    output: todoSchema,
+  add: {
+    input: messageSchema
+      .extend({ quote: z.string().min(1).max(MAX_TEXT_LENGTH).optional() })
+      .strict(),
+    output: z.object({ pin: pinSchema }),
   },
-  todos_remove: {
-    input: z.object({ id: z.string() }),
+  remove: {
+    input: z.object({ id: z.string().min(1) }).strict(),
     output: z.object({ removed: z.boolean() }),
   },
 });
 
-/** Realtime channel app.tsx listens on; the payload is the todo count. */
-const TODOS_CHANGED = "todos-changed";
+export interface PinRow {
+  id: string;
+  thread_id: string;
+  seq: number;
+  row_id: string;
+  role: "user" | "assistant";
+  text: string;
+  quote: string | null;
+  thread_title: string | null;
+  project_id: string | null;
+  thread_deleted: number;
+  created_at: number;
+}
+
+// Append-only: the index of a statement is its migration id.
+const MIGRATIONS = [
+  `CREATE TABLE pins (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    row_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    quote TEXT,
+    thread_title TEXT,
+    project_id TEXT,
+    thread_deleted INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    UNIQUE (thread_id, seq)
+  )`,
+];
+
+export function toPin(row: PinRow): Pin {
+  return {
+    id: row.id,
+    threadId: row.thread_id,
+    seq: row.seq,
+    rowId: row.row_id,
+    role: row.role,
+    excerpt: truncate(row.quote ?? row.text, EXCERPT_LENGTH),
+    quoted: row.quote !== null,
+    threadTitle: row.thread_title,
+    projectId: row.project_id,
+    threadDeleted: row.thread_deleted === 1,
+    createdAt: row.created_at,
+  };
+}
 
 export default async function plugin(bb: BbPluginApi) {
-  bb.log.info("loaded");
+  const db = bb.storage.database();
+  bb.storage.migrate(db, MIGRATIONS);
 
-  // Declarative settings — rendered in BB's settings UI and editable with
-  // `bb plugin config pins`. Add `secret: true` for values like API keys.
-  // Settings are read once per load: reload the plugin after changing one.
-  const settings = bb.settings.define({
-    showDone: {
-      type: "boolean",
-      label: "Show completed todos",
-      default: true,
-    },
-  });
-  const { showDone } = await settings.get();
+  const selectAll = db.prepare<[], PinRow>(
+    "SELECT * FROM pins ORDER BY created_at DESC, rowid DESC",
+  );
+  const selectByThread = db.prepare<[string], PinRow>(
+    "SELECT * FROM pins WHERE thread_id = ? ORDER BY seq ASC",
+  );
+  const selectByMessage = db.prepare<[string, number], PinRow>(
+    "SELECT * FROM pins WHERE thread_id = ? AND seq = ?",
+  );
+  const insertRow = db.prepare<[Omit<PinRow, "thread_deleted">]>(
+    `INSERT OR IGNORE INTO pins
+      (id, thread_id, seq, row_id, role, text, quote, thread_title, project_id, created_at)
+     VALUES
+      (@id, @thread_id, @seq, @row_id, @role, @text, @quote, @thread_title, @project_id, @created_at)`,
+  );
+  const updateQuote = db.prepare<[string, number, string]>(
+    "UPDATE pins SET quote = ?, created_at = ? WHERE id = ?",
+  );
+  const deleteById = db.prepare<[string]>("DELETE FROM pins WHERE id = ?");
+  const markThreadDeleted = db.prepare<[string]>(
+    "UPDATE pins SET thread_deleted = 1 WHERE thread_id = ? AND thread_deleted = 0",
+  );
+  const refreshThread = db.prepare<
+    [{ threadId: string; title: string | null; projectId: string }]
+  >(
+    `UPDATE pins SET thread_title = @title, project_id = @projectId
+     WHERE thread_id = @threadId
+       AND (thread_title IS NOT @title OR project_id IS NOT @projectId)`,
+  );
 
-  // Namespaced key-value storage in bb.db (JSON values, up to 256KB each).
-  // For bigger or relational data use bb.storage.database().
-  async function readTodos(): Promise<Todo[]> {
-    return (await bb.storage.kv.get<Todo[]>("todos")) ?? [];
-  }
-  async function writeTodos(todos: Todo[]): Promise<void> {
-    await bb.storage.kv.set("todos", todos);
-    // Ephemeral broadcast to every connected client; nothing is persisted.
-    bb.realtime.publish(TODOS_CHANGED, { count: todos.length });
+  const publishChange = () => bb.realtime.publish(CHANGED_CHANNEL, null);
+
+  async function describeThread(threadId: string) {
+    try {
+      const thread = await bb.sdk.threads.get({ threadId });
+      return {
+        title: thread.title ?? thread.titleFallback ?? null,
+        projectId: thread.projectId,
+      };
+    } catch (error) {
+      bb.log.warn(`Could not read thread ${threadId}: ${String(error)}`);
+      return { title: null, projectId: null };
+    }
   }
 
-  async function listTodos(): Promise<Todo[]> {
-    const todos = await readTodos();
-    return showDone ? todos : todos.filter((todo) => !todo.done);
+  function messageRow(threadId: string, seq: number): PinRow {
+    const row = selectByMessage.get(threadId, seq);
+    if (row === undefined) throw new Error("The pin could not be saved.");
+    return row;
   }
-  async function addTodo(title: string): Promise<Todo> {
-    const todo: Todo = {
-      id: randomUUID().slice(0, 8),
-      title,
-      done: false,
-      createdAt: new Date().toISOString(),
-    };
-    await writeTodos([...(await readTodos()), todo]);
-    return todo;
-  }
-  async function setTodoDone(id: string, done: boolean): Promise<Todo | null> {
-    const todos = await readTodos();
-    const todo = todos.find((candidate) => candidate.id === id);
-    if (todo === undefined) return null;
-    todo.done = done;
-    await writeTodos(todos);
-    return todo;
-  }
-  async function removeTodo(id: string): Promise<boolean> {
-    const todos = await readTodos();
-    const remaining = todos.filter((todo) => todo.id !== id);
-    if (remaining.length === todos.length) return false;
-    await writeTodos(remaining);
-    return true;
+
+  async function create(
+    message: z.infer<typeof messageSchema>,
+    quote: string | null,
+  ): Promise<PinRow> {
+    const thread = await describeThread(message.threadId);
+    // A concurrent pin of the same message wins; both callers get its row.
+    insertRow.run({
+      id: randomUUID(),
+      thread_id: message.threadId,
+      seq: message.seq,
+      row_id: message.rowId,
+      role: message.role,
+      text: message.text,
+      quote,
+      thread_title: thread.title,
+      project_id: thread.projectId,
+      created_at: Date.now(),
+    });
+    return messageRow(message.threadId, message.seq);
   }
 
   bb.rpc.register(rpcContract, {
-    todos_list: async () => ({ todos: await listTodos() }),
-    todos_add: ({ title }) => addTodo(title),
-    todos_set_done: async ({ id, done }) => {
-      const todo = await setTodoDone(id, done);
-      if (todo === null) throw new Error(`No todo with id ${id}`);
-      return todo;
+    list(input) {
+      const rows =
+        input?.threadId === undefined
+          ? selectAll.all()
+          : selectByThread.all(input.threadId);
+      return { pins: rows.map(toPin) };
     },
-    todos_remove: async ({ id }) => ({ removed: await removeTodo(id) }),
-  });
-
-  // The `bb pins` command: what agents (and you) use from a shell. Parsing
-  // argv is plugin-owned; `commands` is metadata BB renders into help and
-  // the generated plugin-commands skill without running plugin code.
-  const usage = [
-    "Usage:",
-    "  bb pins list [--json]",
-    "  bb pins add <title> [--json]",
-    "  bb pins done <todo-id> [--json]",
-    "  bb pins undo <todo-id> [--json]",
-    "  bb pins remove <todo-id> [--json]",
-  ].join("\n");
-  function formatTodo(todo: Todo): string {
-    return `[${todo.done ? "x" : " "}] ${todo.id}  ${todo.title}`;
-  }
-  bb.cli.register({
-    name: "pins",
-    summary: "Manage the Pins plugin's example todo list",
-    commands: [
-      { name: "list", summary: "List todos", usage: "bb pins list [--json]" },
-      {
-        name: "add",
-        summary: "Add a todo",
-        usage: "bb pins add <title> [--json]",
-      },
-      {
-        name: "done",
-        summary: "Mark a todo done",
-        usage: "bb pins done <todo-id> [--json]",
-      },
-      {
-        name: "undo",
-        summary: "Mark a todo not done",
-        usage: "bb pins undo <todo-id> [--json]",
-      },
-      {
-        name: "remove",
-        summary: "Remove a todo",
-        usage: "bb pins remove <todo-id> [--json]",
-      },
-    ],
-    async run(argv) {
-      const json = argv.includes("--json");
-      const [command, ...args] = argv.filter((arg) => arg !== "--json");
-      const reply = (value: unknown, text: string) => ({
-        exitCode: 0,
-        stdout: json ? JSON.stringify(value) : text,
-      });
-      const notFound = (missingId: string) => ({
-        exitCode: 1,
-        stderr: `No todo with id ${missingId}. Run "bb pins list" to see ids.`,
-      });
-      const todoId = args[0];
-      switch (command) {
-        case undefined:
-        case "help":
-        case "--help":
-          return { exitCode: 0, stdout: usage };
-        case "list": {
-          const todos = await listTodos();
-          return reply(
-            todos,
-            todos.length === 0 ? "No todos." : todos.map(formatTodo).join("\n"),
-          );
-        }
-        case "add": {
-          const title = args.join(" ").trim();
-          if (title === "") break;
-          const todo = await addTodo(title);
-          return reply(todo, `Added ${formatTodo(todo)}`);
-        }
-        case "done":
-        case "undo": {
-          if (todoId === undefined || args.length !== 1) break;
-          const todo = await setTodoDone(todoId, command === "done");
-          if (todo === null) return notFound(todoId);
-          return reply(todo, formatTodo(todo));
-        }
-        case "remove": {
-          if (todoId === undefined || args.length !== 1) break;
-          if (!(await removeTodo(todoId))) return notFound(todoId);
-          return reply({ removed: true, id: todoId }, `Removed ${todoId}`);
-        }
+    async toggle(message) {
+      const existing = selectByMessage.get(message.threadId, message.seq);
+      if (existing !== undefined) {
+        deleteById.run(existing.id);
+        publishChange();
+        return { pin: null };
       }
-      return { exitCode: 1, stderr: usage };
+      const row = await create(message, null);
+      publishChange();
+      return { pin: toPin(row) };
+    },
+    async add({ quote, ...message }) {
+      const existing = selectByMessage.get(message.threadId, message.seq);
+      if (existing === undefined) {
+        await create(message, quote ?? null);
+      } else if (quote !== undefined) {
+        updateQuote.run(quote, Date.now(), existing.id);
+      }
+      publishChange();
+      return { pin: toPin(messageRow(message.threadId, message.seq)) };
+    },
+    remove({ id }) {
+      const removed = deleteById.run(id).changes > 0;
+      if (removed) publishChange();
+      return { removed };
     },
   });
 
-  // Cleanup on reload/disable/shutdown; hooks run LIFO. The sanctioned place
-  // to clear timers and close connections.
-  bb.onDispose(() => {
-    bb.log.info("disposed");
+  bb.events.on("thread.deleted", ({ thread }) => {
+    if (markThreadDeleted.run(thread.id).changes > 0) publishChange();
   });
 
-  // Long-lived background work: starts after load, gets an AbortSignal on
-  // reload/disable/shutdown, and restarts with backoff if it crashes. Sleeps
-  // must wake on abort — a plain setTimeout sleeps through the stop window
-  // and the plugin reports "degraded (service did not stop)" on reload.
-  // bb.background.service("worker", {
-  //   async start(signal) {
-  //     while (!signal.aborted) {
-  //       await new Promise((resolve) => {
-  //         const timer = setTimeout(resolve, 60_000);
-  //         signal.addEventListener(
-  //           "abort",
-  //           () => { clearTimeout(timer); resolve(undefined); },
-  //           { once: true },
-  //         );
-  //       });
-  //     }
-  //   },
-  // });
+  // Titles are usually generated after the first turn, so refresh the saved
+  // title whenever a thread goes idle.
+  bb.events.on("thread.idle", ({ thread }) => {
+    const result = refreshThread.run({
+      threadId: thread.id,
+      title: thread.title ?? thread.titleFallback ?? null,
+      projectId: thread.projectId,
+    });
+    if (result.changes > 0) publishChange();
+  });
 }
