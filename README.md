@@ -73,3 +73,7 @@ The way a pin jumps to a message (pushing the router history entry with
 marking pinned messages with CSS keyed on `[data-timeline-row-id]`, come from
 the [Bookmarks plugin](https://github.com/rebryk/bb-plugins/tree/main/bookmarks)
 by Yurii Rebryk. The code here is a separate implementation.
+
+## Website
+
+Project page: https://ponravilos.ru/bb-plugin-pins/ (sources in `web/`, deploy with `web/deploy.sh`).

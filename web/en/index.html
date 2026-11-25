@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pins — pin messages in a BB thread</title>
+  <meta name="description" content="A BB plugin: pin several messages in a thread, like Telegram. A pins bar above the thread and a page of all pins in the sidebar.">
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="../assets/img/pin.svg">
+  <meta name="theme-color" content="#121214">
+  <meta property="og:title" content="Pins — pin messages in a BB thread">
+  <meta property="og:description" content="A BB plugin: pin several messages in a thread, like Telegram. A pins bar above the thread and a page of all pins in the sidebar.">
+  <link rel="alternate" hreflang="en" href="https://ponravilos.ru/bb-plugin-pins/en/">
+  <link rel="alternate" hreflang="ru" href="https://ponravilos.ru/bb-plugin-pins/">
+</head>
+<body>
+  <header class="site-header"><div class="container header-inner">
+    <a class="brand" href="../index.html"><div class="brand-mark" aria-hidden="true"></div><div class="brand-text"><strong>Pins</strong><span>for BB</span></div></a>
+    <nav class="nav"><a href="../index.html">RU</a><a href="./index.html" class="active">EN</a><button id="themeToggle" class="theme-toggle" aria-label="Theme">🌓</button></nav>
+  </div></header>
+  <section class="hero"><div class="container hero-inner">
+    <div class="hero-content"><h1>Pin messages in a thread, like Telegram</h1><p class="lead">Pins is a plugin for BB. Pin the messages that matter, yours or the agent's, and get back to them in one click: a pins bar sits above the thread, and every pin from every thread is listed on a page in the sidebar.</p>
+      <div class="cta-row"><a class="btn btn-primary" href="#install">Install</a><a class="btn btn-secondary" href="#features">Features</a></div></div>
+    <div class="hero-visual"><div class="app-preview"><img class="preview-icon" src="../assets/img/pin.svg" alt="Pins"><p class="preview-caption">BB 0.50+ · MIT · data stays local</p></div></div>
+  </div></section>
+  <section id="features" class="features section"><div class="container"><h2>Features</h2><div class="feature-grid"><div class="feature"><div class="feature-icon">📌</div><h3>Pins in a thread</h3><p>A Pin button on every message. Pin as many as you like; click again to unpin.</p></div><div class="feature"><div class="feature-icon">🔝</div><h3>Bar on top</h3><p>The thread shows a pin, a 2/5 counter and arrows. Click the text to scroll to the message. With no pins the bar takes no space.</p></div><div class="feature"><div class="feature-icon">🗂</div><h3>Sidebar page</h3><p>A Pins item in bb navigation: pins of all threads in groups, search, and a badge with the pin count.</p></div><div class="feature"><div class="feature-icon">🔎</div><h3>Right panel tab</h3><p>A list of pins from all threads with search and a "This thread" filter.</p></div><div class="feature"><div class="feature-icon">↪️</div><h3>Jump to the message</h3><p>Opens the thread and scrolls to the message, however far back it is.</p></div><div class="feature"><div class="feature-icon">🔒</div><h3>Local</h3><p>Pins live in the plugin database on your bb server, with a copy of the text. Nothing leaves your machine.</p></div></div></div></section>
+  <section class="section"><div class="container"><h2>Screenshots</h2><div class="shots"><figure><img src="../assets/img/thread-bar.jpg" alt="The pins bar above a thread: counter, arrows, unpin" loading="lazy"><figcaption>The pins bar above a thread: counter, arrows, unpin</figcaption></figure><figure><img src="../assets/img/pins-page.jpg" alt="The sidebar Pins page: pins grouped by thread, with search" loading="lazy"><figcaption>The sidebar Pins page: pins grouped by thread, with search</figcaption></figure></div></div></section>
+  <section id="install" class="permissions section"><div class="container"><h2>Install</h2>
+    <pre style="overflow-x:auto;padding:14px 16px;border:1px solid var(--sep);border-radius:12px;background:var(--card)"><code>bb plugin install git:https://github.com/yazydzhi/bb-plugin-pins.git</code></pre>
+    <p class="muted">Requires BB 0.50 or newer. After install, messages get a Pin button and the sidebar gets a Pins item.</p>
+    <h3>Limits</h3><ul class="versions-who"><li>One pin per message: pinning another selection of the same message replaces the saved quote.</li><li>Cmd/Ctrl-click opens the thread in a split but does not scroll to the message.</li><li>Pins of deleted threads stay listed but cannot be opened.</li></ul></div></section>
+  <section class="download section"><div class="container"><div class="dl-grid"><div class="dl-item">
+    <a class="btn btn-primary btn-lg" href="https://github.com/yazydzhi/bb-plugin-pins" target="_blank" rel="noopener">GitHub</a><p class="muted">Source code and releases, MIT license</p></div></div></div></section>
+  <footer class="site-footer"><div class="container footer-inner"><div class="footer-meta"><span>© <span id="year"></span> Pins · Vladimir Yazydzhi</span> <span>· The jump-to-message mechanism is borrowed from the Bookmarks plugin.</span></div></div></footer>
+  <script>
+    const themeKey = 'pins-theme', root = document.documentElement, saved = localStorage.getItem(themeKey);
+    if (saved) root.setAttribute('data-theme', saved);
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next); localStorage.setItem(themeKey, next);
+    });
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

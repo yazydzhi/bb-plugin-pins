@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pins — закрепы сообщений для BB</title>
+  <meta name="description" content="Плагин для BB: закрепляйте несколько сообщений в треде, как в Telegram. Панель закрепов вверху треда, страница всех закрепов в боковом меню.">
+  <link rel="stylesheet" href="./assets/css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="./assets/img/pin.svg">
+  <meta name="theme-color" content="#121214">
+  <meta property="og:title" content="Pins — закрепы сообщений для BB">
+  <meta property="og:description" content="Плагин для BB: закрепляйте несколько сообщений в треде, как в Telegram. Панель закрепов вверху треда, страница всех закрепов в боковом меню.">
+  <link rel="alternate" hreflang="en" href="https://ponravilos.ru/bb-plugin-pins/en/">
+  <link rel="alternate" hreflang="ru" href="https://ponravilos.ru/bb-plugin-pins/">
+</head>
+<body>
+  <header class="site-header"><div class="container header-inner">
+    <a class="brand" href="./index.html"><div class="brand-mark" aria-hidden="true"></div><div class="brand-text"><strong>Pins</strong><span>for BB</span></div></a>
+    <nav class="nav"><a href="./index.html" class="active">RU</a><a href="./en/index.html">EN</a><button id="themeToggle" class="theme-toggle" aria-label="Theme">🌓</button></nav>
+  </div></header>
+  <section class="hero"><div class="container hero-inner">
+    <div class="hero-content"><h1>Закрепляйте сообщения в треде, как в Telegram</h1><p class="lead">Pins — плагин для BB. Закрепите нужные сообщения — свои или агента — и возвращайтесь к ним в один клик: панель закрепов висит над тредом, а все закрепы по всем тредам собраны на отдельной странице в боковом меню.</p>
+      <div class="cta-row"><a class="btn btn-primary" href="#install">Установить</a><a class="btn btn-secondary" href="#features">Возможности</a></div></div>
+    <div class="hero-visual"><div class="app-preview"><img class="preview-icon" src="./assets/img/pin.svg" alt="Pins"><p class="preview-caption">BB 0.50+ · MIT · данные только локально</p></div></div>
+  </div></section>
+  <section id="features" class="features section"><div class="container"><h2>Что умеет</h2><div class="feature-grid"><div class="feature"><div class="feature-icon">📌</div><h3>Закрепы в треде</h3><p>Кнопка Pin у любого сообщения. Закрепить можно несколько, повторный клик снимает.</p></div><div class="feature"><div class="feature-icon">🔝</div><h3>Панель сверху</h3><p>Над тредом видно закреп, счётчик 2/5 и стрелки. Клик по тексту прокручивает к сообщению. Без закрепов панель места не занимает.</p></div><div class="feature"><div class="feature-icon">🗂</div><h3>Страница в боковом меню</h3><p>Пункт Pins в навигации bb: закрепы всех тредов по группам, поиск, бейдж с числом закрепов.</p></div><div class="feature"><div class="feature-icon">🔎</div><h3>Вкладка в правой панели</h3><p>Список закрепов всех тредов с поиском и фильтром «This thread».</p></div><div class="feature"><div class="feature-icon">↪️</div><h3>Переход к сообщению</h3><p>Открывает нужный тред и прокручивает к сообщению, даже если оно далеко в истории.</p></div><div class="feature"><div class="feature-icon">🔒</div><h3>Локально</h3><p>Закрепы лежат в базе плагина на вашем сервере bb, вместе с копией текста. Ничего не уходит наружу.</p></div></div></div></section>
+  <section class="section"><div class="container"><h2>Скриншоты</h2><div class="shots"><figure><img src="./assets/img/thread-bar.jpg" alt="Панель закрепов вверху треда: счётчик, стрелки, открепить" loading="lazy"><figcaption>Панель закрепов вверху треда: счётчик, стрелки, открепить</figcaption></figure><figure><img src="./assets/img/pins-page.jpg" alt="Страница Pins в боковом меню: закрепы по тредам и поиск" loading="lazy"><figcaption>Страница Pins в боковом меню: закрепы по тредам и поиск</figcaption></figure></div></div></section>
+  <section id="install" class="permissions section"><div class="container"><h2>Установка</h2>
+    <pre style="overflow-x:auto;padding:14px 16px;border:1px solid var(--sep);border-radius:12px;background:var(--card)"><code>bb plugin install git:https://github.com/yazydzhi/bb-plugin-pins.git</code></pre>
+    <p class="muted">Нужен BB 0.50 или новее. После установки у сообщений появится кнопка Pin, а в боковом меню — пункт Pins.</p>
+    <h3>Ограничения</h3><ul class="versions-who"><li>У сообщения один закреп: другой фрагмент того же сообщения заменит прежнюю цитату.</li><li>Cmd/Ctrl-клик открывает тред в split, но не прокручивает к сообщению.</li><li>Закрепы удалённых тредов остаются в списке, но открыть их нельзя.</li></ul></div></section>
+  <section class="download section"><div class="container"><div class="dl-grid"><div class="dl-item">
+    <a class="btn btn-primary btn-lg" href="https://github.com/yazydzhi/bb-plugin-pins" target="_blank" rel="noopener">GitHub</a><p class="muted">Исходный код и релизы, лицензия MIT</p></div></div></div></section>
+  <footer class="site-footer"><div class="container footer-inner"><div class="footer-meta"><span>© <span id="year"></span> Pins · Vladimir Yazydzhi</span> <span>· Механизм перехода к сообщению позаимствован из плагина Bookmarks.</span></div></div></footer>
+  <script>
+    const themeKey = 'pins-theme', root = document.documentElement, saved = localStorage.getItem(themeKey);
+    if (saved) root.setAttribute('data-theme', saved);
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next); localStorage.setItem(themeKey, next);
+    });
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
