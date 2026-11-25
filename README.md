@@ -31,6 +31,7 @@ Requires BB 0.50 or newer.
 
 ## Limits
 
+- One pin per message: pinning another selection of an already pinned message replaces the saved quote.
 - Text is stored per pin up to 20,000 characters; the list shows a short
   excerpt.
 - Jumping to a message in another thread opens that thread and scrolls to the

@@ -160,11 +160,11 @@ export default async function plugin(bb: BbPluginApi) {
     return row;
   }
 
-  async function create(
+  function create(
     message: z.infer<typeof messageSchema>,
     quote: string | null,
-  ): Promise<PinRow> {
-    const thread = await describeThread(message.threadId);
+    thread: { title: string | null; projectId: string | null },
+  ): PinRow {
     // A concurrent pin of the same message wins; both callers get its row.
     insertRow.run({
       id: randomUUID(),
@@ -190,20 +190,23 @@ export default async function plugin(bb: BbPluginApi) {
       return { pins: rows.map(toPin) };
     },
     async toggle(message) {
+      // Await before the check: no await between check and write, so two quick clicks pin then unpin.
+      const thread = await describeThread(message.threadId);
       const existing = selectByMessage.get(message.threadId, message.seq);
       if (existing !== undefined) {
         deleteById.run(existing.id);
         publishChange();
         return { pin: null };
       }
-      const row = await create(message, null);
+      const row = create(message, null, thread);
       publishChange();
       return { pin: toPin(row) };
     },
     async add({ quote, ...message }) {
+      const thread = await describeThread(message.threadId);
       const existing = selectByMessage.get(message.threadId, message.seq);
       if (existing === undefined) {
-        await create(message, quote ?? null);
+        create(message, quote ?? null, thread);
       } else if (quote !== undefined) {
         updateQuote.run(quote, Date.now(), existing.id);
       }
