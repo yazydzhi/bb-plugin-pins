@@ -48,6 +48,7 @@ describe("registrations", () => {
     expect(app.tabs.map((t) => t.id)).toEqual(["pins"]);
     expect(app.newThreadPanelActions.map((a) => a.id)).toEqual(["pins"]);
     expect(app.appOverlays).toHaveLength(1);
+    expect(app.navPanels.map((n) => [n.id, n.path, n.title])).toEqual([["pins", "pins", "Pins"]]);
   });
 });
 
@@ -225,6 +226,94 @@ describe("pins panel", () => {
       expect(slot.inspection.rpcCalls.some((c) => c.method === "remove")).toBe(true),
     );
     slot.lifecycle.unmount();
+  });
+});
+
+describe("pins page", () => {
+  const nav = async () => (await loadPluginApp(() => import("./app"))).navPanels[0]!;
+  const sidebar = {
+    threads: [sidebarThread],
+    projects: [{ id: "proj_one", name: "Alpha project", isPersonal: false, href: "/", settingsHref: "/" }],
+  };
+  const two = () => ({
+    pins: [
+      pin({ id: "a", excerpt: "Alpha text", createdAt: 1 }),
+      pin({ id: "b", threadId: "thr_two", threadTitle: "Second thread", projectId: null, excerpt: "Beta text", createdAt: 9 }),
+      pin({ id: "c", threadId: "thr_gone", threadDeleted: true, excerpt: "Orphan", createdAt: 5 }),
+    ],
+  });
+
+  it("groups pins by thread with project and count, deleted threads last", async () => {
+    const slot = renderSlot(await nav(), { subPath: "" }, { rpc: { list: two }, sidebarThreads: sidebar as never });
+    await slot.findByText("Beta text");
+    const titles = Array.from(slot.container.querySelectorAll(".pins-group-title"), (e) => e.textContent);
+    expect(titles).toEqual(["Second thread", "Live title", "Deleted threads"]);
+    expect(slot.getByText("Alpha project")).toBeTruthy();
+    expect(slot.container.querySelector(".pins-group-count")?.textContent).toBe("1");
+    expect((slot.getByText("Orphan").closest("button") as HTMLButtonElement).disabled).toBe(true);
+    slot.lifecycle.unmount();
+  });
+
+  it("collapses a group and searches across text and thread titles", async () => {
+    const slot = renderSlot(await nav(), { subPath: "" }, { rpc: { list: two }, sidebarThreads: sidebar as never });
+    await slot.findByText("Beta text");
+    fireEvent.click(slot.getByText("Second thread"));
+    expect(slot.queryByText("Beta text")).toBeNull();
+    fireEvent.change(slot.getByPlaceholderText("Search pins and threads"), { target: { value: "second" } });
+    expect(slot.getByText("Beta text")).toBeTruthy();
+    expect(slot.queryByText("Alpha text")).toBeNull();
+    fireEvent.change(slot.getByPlaceholderText("Search pins and threads"), { target: { value: "nothing" } });
+    expect(slot.getByText("No pins match “nothing”.")).toBeTruthy();
+    slot.lifecycle.unmount();
+  });
+
+  it("shows the empty state", async () => {
+    const slot = renderSlot(await nav(), { subPath: "" }, { rpc: { list: () => ({ pins: [] }) } });
+    expect(await slot.findByText("No pins yet — use the pin button on a message.")).toBeTruthy();
+    slot.lifecycle.unmount();
+  });
+
+  it("removes a pin", async () => {
+    const slot = renderSlot(await nav(), { subPath: "" }, {
+      rpc: { list: () => ({ pins: [pin()] }), remove: () => ({ removed: true }) },
+    });
+    await slot.findByText("Keep one pin per message.");
+    fireEvent.click(slot.getByRole("button", { name: "Remove pin" }));
+    await vi.waitFor(() =>
+      expect(slot.inspection.rpcCalls.some((c) => c.method === "remove")).toBe(true),
+    );
+    slot.lifecycle.unmount();
+  });
+
+  it("jumps from the plugin route, and opens a split on Cmd-click", async () => {
+    window.history.replaceState({ usr: null, key: "start", idx: 2 }, "", "/plugins/pins/pins");
+    const slot = renderSlot(await nav(), { subPath: "" }, {
+      rpc: { list: () => ({ pins: [pin()] }) },
+      sidebarThreads: sidebar as never,
+    });
+    const row = await slot.findByText("Keep one pin per message.");
+    fireEvent.click(row);
+    expect(window.location.pathname).toBe("/projects/proj_one/threads/thr_one");
+    expect(window.history.state).toMatchObject({ usr: { searchMessageSeq: 10, searchThreadId: "thr_one" }, idx: 3 });
+    fireEvent.click(row, { metaKey: true });
+    expect(slot.inspection.navigateCalls).toContainEqual(
+      expect.objectContaining({ method: "toThread", threadId: "thr_one" }),
+    );
+    slot.lifecycle.unmount();
+  });
+
+  it("badges the total pin count, and nothing when empty", async () => {
+    const registration = await nav();
+    const Probe = () => {
+      const badge = registration.experimental_useBadge!();
+      return <span data-testid="badge">{badge === null ? "none" : `${badge.count}|${badge.label}`}</span>;
+    };
+    const full = renderSlot({ ...registration, component: Probe } as never, { subPath: "" }, { rpc: { list: two } });
+    await vi.waitFor(() => expect(full.getByTestId("badge").textContent).toBe("3|3 pins"));
+    full.lifecycle.unmount();
+    const empty = renderSlot({ ...registration, component: Probe } as never, { subPath: "" }, { rpc: { list: () => ({ pins: [] }) } });
+    expect(empty.getByTestId("badge").textContent).toBe("none");
+    empty.lifecycle.unmount();
   });
 });
 

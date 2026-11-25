@@ -11,6 +11,9 @@ right panel.
   jump to the message.
 - A **Pins** tab with pins from all threads, newest first, with search and a
   "This thread" filter.
+- A **Pins** entry in the sidebar navigation: a full page with every pin
+  grouped by thread, search, collapsible groups, jump and remove, and a badge
+  with the total pin count.
 - A **Pins: Show pinned messages** command in the command palette.
 
 ## How it works

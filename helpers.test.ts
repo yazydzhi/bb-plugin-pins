@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   currentIndex,
   filterPins,
+  groupPins,
   formatAge,
   plainText,
   snippet,
@@ -97,5 +98,33 @@ describe("markerStyles", () => {
     expect(css).toContain('[data-timeline-row-id="row\\"}body{x:y"]');
     expect(css).toContain('button[aria-label="Pin"]');
     expect(markerStyles([])).toBe("");
+  });
+});
+
+describe("groupPins", () => {
+  const mk = (id: string, threadId: string, createdAt: number, excerpt: string, extra = {}) => ({
+    id, threadId, seq: 1, createdAt, excerpt, threadTitle: `saved ${threadId}`, threadDeleted: false, ...extra,
+  });
+  const pins = [
+    mk("a1", "t1", 5, "Alpha cache"),
+    mk("b1", "t2", 9, "Beta"),
+    mk("a2", "t1", 1, "Alpha old"),
+    mk("d1", "t3", 99, "Gone", { threadDeleted: true }),
+  ];
+  const titleOf = (pin: { threadId: string }) => `Thread ${pin.threadId}`;
+
+  it("groups by thread, newest activity first, deleted threads last", () => {
+    const groups = groupPins(pins, titleOf, "");
+    expect(groups.map((g) => [g.title, g.pins.map((p) => p.id)])).toEqual([
+      ["Thread t2", ["b1"]],
+      ["Thread t1", ["a1", "a2"]],
+      ["Deleted threads", ["d1"]],
+    ]);
+  });
+
+  it("searches pin text and group titles", () => {
+    expect(groupPins(pins, titleOf, "CACHE").map((g) => g.pins.map((p) => p.id))).toEqual([["a1"]]);
+    expect(groupPins(pins, titleOf, "thread t1")[0]!.pins).toHaveLength(2);
+    expect(groupPins(pins, titleOf, "zzz")).toEqual([]);
   });
 });

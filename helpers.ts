@@ -103,3 +103,58 @@ export function formatAge(createdAt: number, now: number): string {
     day: "numeric",
   });
 }
+
+export interface PinGroup<T> {
+  /** Thread id; `deleted` for the single group of deleted threads. */
+  key: string;
+  title: string;
+  deleted: boolean;
+  /** Newest pin first. */
+  pins: T[];
+  /** createdAt of the newest pin (the group's latest activity). */
+  newest: number;
+}
+
+export const DELETED_GROUP_KEY = "deleted";
+
+/**
+ * Pins grouped by thread for the Pins page: groups with the newest pin first,
+ * deleted threads folded into one last group. A query keeps the pins whose
+ * text matches; a group whose title matches keeps all its pins.
+ */
+export function groupPins<T extends PinLike & { threadDeleted: boolean }>(
+  pins: readonly T[],
+  titleOf: (pin: T) => string,
+  query: string,
+): PinGroup<T>[] {
+  const needle = query.trim().toLocaleLowerCase();
+  const byKey = new Map<string, PinGroup<T>>();
+  for (const pin of [...pins].sort((a, b) => b.createdAt - a.createdAt)) {
+    const key = pin.threadDeleted ? DELETED_GROUP_KEY : pin.threadId;
+    const group = byKey.get(key) ?? {
+      key,
+      title: pin.threadDeleted ? "Deleted threads" : titleOf(pin),
+      deleted: pin.threadDeleted,
+      pins: [],
+      newest: pin.createdAt,
+    };
+    group.pins.push(pin);
+    byKey.set(key, group);
+  }
+  const groups = [...byKey.values()];
+  const kept =
+    needle === ""
+      ? groups
+      : groups.flatMap((group) => {
+          if (group.title.toLocaleLowerCase().includes(needle)) return [group];
+          const matching = group.pins.filter(
+            (pin) =>
+              pin.excerpt.toLocaleLowerCase().includes(needle) ||
+              (pin.threadTitle ?? "").toLocaleLowerCase().includes(needle),
+          );
+          return matching.length === 0 ? [] : [{ ...group, pins: matching }];
+        });
+  return kept.sort(
+    (a, b) => Number(a.deleted) - Number(b.deleted) || b.newest - a.newest,
+  );
+}

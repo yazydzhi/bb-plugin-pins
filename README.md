@@ -28,6 +28,14 @@ Requires BB 0.50 or newer.
   pins of all threads, newest first, with the thread title. Search filters by
   text and thread title; "This thread" limits the list. Click a pin to open its
   thread at the message; the trash icon removes it.
+- **The Pins page.** The "Pins" entry in bb's sidebar navigation (arrange or
+  hide it like any other entry) opens a full page with all pins grouped by
+  thread: thread title, project and pin count, newest activity first. Click a
+  group header to collapse it. Search filters by pin text and thread title and
+  opens the matching groups. Click a pin to open its thread at the message
+  (Cmd/Ctrl-click opens the thread in a split, without scrolling); the trash
+  icon removes it. Pins of deleted threads sit in a "Deleted threads" group and
+  cannot be opened. The sidebar entry shows the total pin count as a badge.
 
 ## Limits
 
@@ -50,10 +58,11 @@ npm run typecheck
 npm run build       # bb plugin build -> dist/
 ```
 
-`server.ts` owns the SQLite table (`bb.storage.database()` with append-only
+`common.tsx` holds the hooks shared by all surfaces (`usePins`, `useJumpToPin`);
+`page.tsx` is the Pins page and its badge. `server.ts` owns the SQLite table (`bb.storage.database()` with append-only
 migrations) and the RPC `list`, `toggle`, `add`, `remove`. `app.tsx` registers
-the message action, the thread header row, the panel tab and the palette
-command. Every write publishes a realtime signal on the `changed` channel, and
+the message action, the thread header row, the panel tab, the nav panel and
+the palette command. Every write publishes a realtime signal on the `changed` channel, and
 each surface refetches on it, so the bar, the panel and the filled pin icons
 update live, including across windows.
 
